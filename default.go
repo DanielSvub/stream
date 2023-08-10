@@ -20,14 +20,14 @@ type DefaultConsumer[T any] struct {
 
 func (ego *DefaultConsumer[T]) Consume() (value T, valid bool, err error) {
 	if ego.source == nil {
-		return *new(T), false, errors.New("No source to consume from.")
+		return *new(T), false, errors.New("no source to consume from")
 	}
 	return ego.source.Get()
 }
 
 func (ego *DefaultConsumer[T]) SetSource(s Producer[T]) error {
 	if !ego.CanSetSource() {
-		return errors.New("The source has already been set.")
+		return errors.New("the source has already been set")
 	}
 	ego.source = s
 	return nil
@@ -48,8 +48,8 @@ func NewDefaultProducer[T any](p Producer[T]) *DefaultProducer[T] {
 
 func (ego *DefaultProducer[T]) Pipe(c Consumer[T]) Consumer[T] {
 
-	if !c.(Consumer[T]).CanSetSource() {
-		panic("The consumer does not accept new sources.")
+	if !c.CanSetSource() {
+		panic("the consumer does not accept new sources")
 	}
 
 	if err := c.SetSource(ego.producer); err != nil {
@@ -64,11 +64,11 @@ func (ego *DefaultProducer[T]) Pipe(c Consumer[T]) Consumer[T] {
 func (ego *DefaultProducer[T]) Read(p []T) (int, error) {
 
 	if ego.piped {
-		return 0, errors.New("The stream is piped.")
+		return 0, errors.New("the stream is piped")
 	}
 
 	if p == nil {
-		return 0, errors.New("The input slice is not initialized.")
+		return 0, errors.New("the input slice is not initialized")
 	}
 
 	n := len(p)
@@ -88,7 +88,7 @@ func (ego *DefaultProducer[T]) Read(p []T) (int, error) {
 func (ego *DefaultProducer[T]) Collect() ([]T, error) {
 
 	if ego.piped {
-		return nil, errors.New("The stream is piped.")
+		return nil, errors.New("the stream is piped")
 	}
 
 	output := make([]T, 0)
@@ -106,7 +106,7 @@ func (ego *DefaultProducer[T]) Collect() ([]T, error) {
 func (ego *DefaultProducer[T]) ForEach(fn func(T) error) error {
 
 	if ego.piped {
-		return errors.New("The stream is piped.")
+		return errors.New("the stream is piped")
 	}
 
 	for {
