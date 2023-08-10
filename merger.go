@@ -31,15 +31,19 @@ func (ego *channeledMerger[T]) merge(s Producer[T]) {
 		}
 
 		value, valid, err := s.Get()
-		if !valid || err != nil {
+		if !valid { //the source is exhausted
 			ego.unsetSource(s)
-			return //TODO what to do with possible error here?
+			return
+		}
+		if err != nil {
+			log.Default().Println(err) //TODO change to slog when it is in the standard
+			return
 		}
 
 		defer func() { //it may happen that the routine was waiting on get while the merge stream got closed. Then we send the delayed data to overflowBuffer and then serve them through Get().
 			if r := recover(); r != nil {
 				ego.overflowBuffer = append(ego.overflowBuffer, value)
-				log.Default().Println("Channel closed externally, extra data sent to overflow buffer.", r, value)
+				log.Default().Println("Channel closed externally, extra data sent to overflow buffer.", r, value) //TODO change to slog.Default().Info("Channel closed externally, extra data sent to overflow buffer.", "error", err, "value", value) when it is in standard library
 			}
 		}()
 

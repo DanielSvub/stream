@@ -76,9 +76,6 @@ func (ego *DefaultProducer[T]) Read(p []T) (int, error) {
 	for i := 0; i < n; i++ {
 		value, valid, err := ego.producer.Get()
 		if err != nil || !valid {
-			if i == 0 {
-				return 0, errors.New("The stream is empty.")
-			}
 			return i, err
 		}
 		p[i] = value
@@ -99,9 +96,6 @@ func (ego *DefaultProducer[T]) Collect() ([]T, error) {
 	for {
 		value, valid, err := ego.producer.Get()
 		if err != nil || !valid {
-			if len(output) == 0 {
-				return output, errors.New("The stream is empty.")
-			}
 			return output, err
 		}
 		output = append(output, value)
@@ -115,17 +109,11 @@ func (ego *DefaultProducer[T]) ForEach(fn func(T) error) error {
 		return errors.New("The stream is piped.")
 	}
 
-	empty := true
-
 	for {
 		value, valid, err := ego.producer.Get()
 		if err != nil || !valid {
-			if empty {
-				return errors.New("The stream is empty.")
-			}
 			return err
 		}
-		empty = false
 		if err := fn(value); err != nil {
 			return err
 		}
