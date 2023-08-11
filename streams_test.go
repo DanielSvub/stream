@@ -199,7 +199,7 @@ func TestStream(t *testing.T) {
 
 	t.Run("Duplex", func(t *testing.T) {
 		inS := NewChanneledInput[int](testDataSize)
-		dupS := NewDuplexer[int](testDataSize)
+		dupS := NewMultiplexer[int](2, testDataSize)
 		inS.Pipe(dupS)
 
 		data := make([]int, testDataSize)
@@ -210,8 +210,8 @@ func TestStream(t *testing.T) {
 		inS.Close()
 
 		for i := 0; i < testDataSize; i++ {
-			value1, valid, err := dupS.First().Get()
-			value2, valid2, err2 := dupS.Second().Get()
+			value1, valid, err := dupS.Out(0).Get()
+			value2, valid2, err2 := dupS.Out(1).Get()
 			if !valid || !valid2 {
 				t.Error("Unexpected invalid data red")
 			}
@@ -224,7 +224,7 @@ func TestStream(t *testing.T) {
 			}
 
 		}
-		value, valid, err := dupS.First().Get()
+		value, valid, err := dupS.Out(0).Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -232,7 +232,7 @@ func TestStream(t *testing.T) {
 			t.Error("unexpected error", err)
 		}
 
-		value, valid, err = dupS.Second().Get()
+		value, valid, err = dupS.Out(1).Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -520,7 +520,7 @@ func TestStream(t *testing.T) {
 
 		//streams (pipeline mebers)
 		inS := NewChanneledInput[int](10)
-		dupS := NewDuplexer[int](10)
+		dupS := NewMultiplexer[int](2, 10)
 		filEven := NewFilter(filterEven)
 		filOdd := NewFilter(filterOdd)
 		traEven := NewTransformer(transformEven)
@@ -529,12 +529,12 @@ func TestStream(t *testing.T) {
 
 		//prepare pipeline
 		inS.Pipe(dupS)
-		dupS.First().Pipe(filEven).(Producer[int]).Pipe(traEven).(Producer[int]).Pipe(merS)
+		dupS.Out(0).Pipe(filEven).(Producer[int]).Pipe(traEven).(Producer[int]).Pipe(merS)
 		//or
 		//		dupS.First().Pipe(filEven)
 		//              filEven.Pipe(traEven)
 		//              traEven.Pipe(merS)
-		dupS.Second().Pipe(filOdd).(Producer[int]).Pipe(traOdd).(Producer[int]).Pipe(merS)
+		dupS.Out(1).Pipe(filOdd).(Producer[int]).Pipe(traOdd).(Producer[int]).Pipe(merS)
 		data := make([]int, testDataSize)
 
 		//feed data into the start of the pipeline (has to be in different goroutine (channel-buffered input stream would casue main thread to wait on Write if buffer is not big enough)

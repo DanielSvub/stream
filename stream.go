@@ -51,10 +51,9 @@ type Filter[T any] interface {
 	Producer[T]
 }
 
-type Duplexer[T any] interface {
+type Multiplexer[T any] interface {
 	Consumer[T]
-	First() Producer[T]
-	Second() Producer[T]
+	Out(index int) Producer[T]
 }
 
 type Splitter[T any] interface {
