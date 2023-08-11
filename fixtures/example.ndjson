@@ -1,0 +1,6 @@
+{"data":{"name":"Kim", "id": 1}, "type":"journalist"}
+{"data":{"name":"Sarah", "id": 2}, "type":"trainer"}
+{"data":{"name":"Arnold", "id": 3}, "type":"developer"}
+{"data":{"name":"Sam", "id": 4}, "type":"driver"}
+{"data":{"name":"Joseph", "id": 5}, "type":"doctor"}
+{"data":{"name":"Milly", "id": 6}, "type":"receptionist"}

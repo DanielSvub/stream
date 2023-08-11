@@ -34,17 +34,17 @@ func (ego *channeledInput[T]) Close() {
 
 func (ego *channeledInput[T]) Write(value ...T) (n int, err error) {
 	if value == nil {
-		return 0, errors.New("Input slice is not initialized.")
+		return 0, errors.New("input slice is not initialized")
 	}
 
 	//defer to catch writing to closed channel or simmilar panicing problems (are there any simmilar?)
 	defer func() {
 		if r := recover(); r != nil {
-			switch r.(type) {
+			switch e := r.(type) {
 			case error:
-				err = r.(error)
+				err = e
 			default:
-				err = errors.New(fmt.Sprint(r))
+				err = errors.New(fmt.Sprint(e))
 			}
 		}
 	}()

@@ -71,3 +71,12 @@ type ChanneledInput[T any] interface {
 	ChanneledProducer[T]
 	Writer[T]
 }
+
+type NdjsonInput[T any] interface {
+	Producer[T]
+}
+
+type NdjsonOutput[T any] interface {
+	Consumer[T]
+	Run() error
+}

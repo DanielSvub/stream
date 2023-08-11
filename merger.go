@@ -59,7 +59,7 @@ func (ego *channeledMerger[T]) SetSource(s Producer[T]) error {
 	ego.sourcesLock.Lock()
 
 	if ego.Closed() {
-		return errors.New("The stream is already closed.")
+		return errors.New("the stream is already closed")
 	}
 
 	ego.sources = append(ego.sources, s)
