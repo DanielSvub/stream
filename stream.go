@@ -59,8 +59,7 @@ type Duplexer[T any] interface {
 
 type Splitter[T any] interface {
 	Consumer[T]
-	Positive() Producer[T]
-	Negative() Producer[T]
+	Out(string) Producer[T]
 }
 
 type Merger[T any] interface {

@@ -239,10 +239,10 @@ func TestStream(t *testing.T) {
 		}
 	})
 
-	t.Run("Split", func(t *testing.T) {
+	t.Run("Binary split", func(t *testing.T) {
 		predicate := func(a int) bool { return a%2 == 0 }
 		inS := NewChanneledInput[int](testDataSize)
-		outS := NewSplitter(10, predicate)
+		outS := NewBinarySplitter(10, predicate)
 		inS.Pipe(outS)
 
 		data := make([]int, testDataSize)
@@ -252,8 +252,8 @@ func TestStream(t *testing.T) {
 		}
 		inS.Close()
 
-		posChan := outS.Positive().(ChanneledProducer[int])
-		negChan := outS.Negative().(ChanneledProducer[int])
+		posChan := outS.Out("positive").(ChanneledProducer[int])
+		negChan := outS.Out("negative").(ChanneledProducer[int])
 		count := 0
 		posValid := true
 		negValid := true
@@ -283,7 +283,7 @@ func TestStream(t *testing.T) {
 			t.Error(testDataSize, "values on input but", count, "values on output.")
 		}
 
-		value, valid, err := outS.Positive().Get()
+		value, valid, err := outS.Out("positive").Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -291,13 +291,147 @@ func TestStream(t *testing.T) {
 			t.Error("unexpected error", err)
 		}
 
-		value, valid, err = outS.Negative().Get()
+		value, valid, err = outS.Out("negative").Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
 		if err != nil {
 			t.Error("unexpected error", err)
 		}
+	})
+
+	t.Run("Split with more branches, _default branch", func(t *testing.T) {
+		predicate2 := func(a int) bool { return a%2 == 0 }
+		predicate3 := func(a int) bool { return a%3 == 0 }
+		predicate5 := func(a int) bool { return a%5 == 0 }
+		predicate7 := func(a int) bool { return a%7 == 0 }
+		inS := NewChanneledInput[int](testDataSize)
+		predicates := map[string]func(int) bool{}
+		predicates["2"] = predicate2
+		predicates["3"] = predicate3
+		predicates["5"] = predicate5
+		predicates["7"] = predicate7
+
+		order := []string{"2", "3", "5", "7"}
+
+		outS, err := NewSplitter(predicates, order, 100)
+		if err != nil {
+			t.Error("unexpected error ", err)
+		}
+		inS.Pipe(outS)
+
+		data := make([]int, testDataSize)
+		for i := 0; i < testDataSize; i++ {
+			data[i] = rand.Int()
+			inS.Write(data[i])
+		}
+		inS.Close()
+
+		chan2 := outS.Out("2").(ChanneledProducer[int])
+		chan3 := outS.Out("3").(ChanneledProducer[int])
+		chan5 := outS.Out("5").(ChanneledProducer[int])
+		chan7 := outS.Out("7").(ChanneledProducer[int])
+		chanDef := outS.Out("_default").(ChanneledProducer[int])
+
+		count := 0
+		valid := map[string]bool{}
+		valid["2"] = true
+		valid["3"] = true
+		valid["5"] = true
+		valid["7"] = true
+		valid["_default"] = true
+
+		for valid["2"] || valid["3"] || valid["5"] || valid["7"] || valid["_default"] {
+			select {
+			case p, v2 := <-chan2.Channel():
+				if !v2 {
+					valid["2"] = false
+					continue
+				}
+				count++
+				if !predicate2(p) {
+					t.Error("Value in wrong out stream (out 2)", p)
+				}
+			case p, v3 := <-chan3.Channel():
+				if !v3 {
+					valid["3"] = false
+					continue
+				}
+				count++
+				if !predicate3(p) || predicate2(p) {
+					t.Error("Value in wrong out stream (out 3)", p)
+				}
+			case p, v5 := <-chan5.Channel():
+				if !v5 {
+					valid["5"] = false
+					continue
+				}
+				count++
+				if !predicate5(p) || predicate2(p) || predicate3(p) {
+					t.Error("Value in wrong out stream (out 5)", p)
+				}
+			case p, v7 := <-chan7.Channel():
+				if !v7 {
+					valid["7"] = false
+					continue
+				}
+				count++
+				if !predicate7(p) || predicate2(p) || predicate3(p) || predicate5(p) {
+					t.Error("Value in wrong out stream (out 7)", p)
+				}
+			case p, vD := <-chanDef.Channel():
+				if !vD {
+					valid["_default"] = false
+					continue
+				}
+				count++
+				if predicate2(p) || predicate3(p) || predicate5(p) || predicate7(p) {
+					t.Error("Value in wrong out stream (out _default)", p)
+				}
+			}
+		}
+		if count != testDataSize {
+			t.Error(testDataSize, "values on input but", count, "values on output.")
+		}
+		for _, name := range order {
+			value, validity, err := outS.Out(name).Get()
+			if validity {
+				t.Error("Unexpected valid data red", value, " in output ", name)
+			}
+			if err != nil {
+				t.Error("unexpected error", err, " in output ", name)
+			}
+		}
+
+	})
+
+	t.Run("Split wrong initialization", func(t *testing.T) {
+		predicate2 := func(a int) bool { return a%2 == 0 }
+		predicate3 := func(a int) bool { return a%3 == 0 }
+		predicate5 := func(a int) bool { return a%5 == 0 }
+		predicate7 := func(a int) bool { return a%7 == 0 }
+		predicates := map[string]func(int) bool{}
+
+		predicates["2"] = predicate2
+		predicates["3"] = predicate3
+		predicates["5"] = predicate5
+		predicates["7"] = predicate7
+
+		_, err := NewSplitter(predicates, []string{"2", "3", "5"}, 100)
+		if err == nil {
+			t.Error("Should be error (evalOrder does not contain 7")
+		}
+
+		_, err = NewSplitter(predicates, []string{"2", "3", "5", "7", "10"}, 100)
+		if err == nil {
+			t.Error("Should be error (evalOrder contains 10 not known to predicates")
+		}
+		predicates["_default"] = predicate2
+		_, err = NewSplitter(predicates, []string{"2", "3", "5", "7", "_default"}, 100)
+		if err == nil {
+			t.Error("Should be error (predicate named _default is not allowed")
+		}
+
 	})
 
 	t.Run("Merge (general functionality, autoclose)", func(t *testing.T) {
