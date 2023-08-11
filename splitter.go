@@ -7,17 +7,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// NewBinarySplitter returns Splitter with only two branches - positive and negative.
-func NewBinarySplitter[T any](buffersCapacity int, predicate func(T) bool) Splitter[T] {
-	predMap := map[string]func(T) bool{}
-	predMap["positive"] = predicate
-	predMap["negative"] = func(a T) bool { return !predicate(a) }
-	res := splitter[T]{predicates: predMap, outputs: map[string]*channeledInput[T]{}, evalOrder: []string{"positive", "negative"}}
-	res.outputs["negative"] = NewChanneledInput[T](buffersCapacity)
-	res.outputs["positive"] = NewChanneledInput[T](buffersCapacity)
-	return &res
-}
-
 type splitter[T any] struct {
 	DefaultConsumer[T]
 	predicates map[string]func(T) bool
@@ -32,17 +21,17 @@ type splitter[T any] struct {
 func NewSplitter[T any](predicates map[string]func(T) bool, evalOrder []string, capacity int) (Splitter[T], error) {
 	for _, n := range evalOrder {
 		if predicates[n] == nil {
-			return nil, errors.New(fmt.Sprintf("Undefined predicate in eval order: %s", n))
+			return nil, fmt.Errorf("undefined predicate in eval order: %s", n)
 		}
 	}
 
 	for n := range predicates {
 		if !slices.Contains(evalOrder, n) {
-			return nil, errors.New(fmt.Sprintf("Predicate name not in eval order: %s", n))
+			return nil, fmt.Errorf("predicate name not in eval order: %s", n)
 		}
 	}
 	if predicates["_default"] != nil {
-		return nil, errors.New("Predicate named \"_default\" is not allowed.")
+		return nil, errors.New("predicate named \"_default\" is not allowed")
 	}
 
 	res := &splitter[T]{predicates: predicates, evalOrder: evalOrder, outputs: map[string]*channeledInput[T]{}}
@@ -51,6 +40,17 @@ func NewSplitter[T any](predicates map[string]func(T) bool, evalOrder []string, 
 	}
 	res.outputs["_default"] = NewChanneledInput[T](capacity)
 	return res, nil
+}
+
+// NewBinarySplitter returns Splitter with only two branches - positive and negative.
+func NewBinarySplitter[T any](buffersCapacity int, predicate func(T) bool) Splitter[T] {
+	predMap := map[string]func(T) bool{}
+	predMap["positive"] = predicate
+	predMap["negative"] = func(a T) bool { return !predicate(a) }
+	res := splitter[T]{predicates: predMap, outputs: map[string]*channeledInput[T]{}, evalOrder: []string{"positive", "negative"}}
+	res.outputs["negative"] = NewChanneledInput[T](buffersCapacity)
+	res.outputs["positive"] = NewChanneledInput[T](buffersCapacity)
+	return &res
 }
 
 func (ego *splitter[T]) pipeData() {

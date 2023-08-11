@@ -61,24 +61,24 @@ func (ego *DefaultProducer[T]) Pipe(c Consumer[T]) Consumer[T] {
 
 }
 
-func (ego *DefaultProducer[T]) Read(p []T) (int, error) {
+func (ego *DefaultProducer[T]) Read(dst []T) (int, error) {
 
 	if ego.piped {
 		return 0, errors.New("the stream is piped")
 	}
 
-	if p == nil {
+	if dst == nil {
 		return 0, errors.New("the input slice is not initialized")
 	}
 
-	n := len(p)
+	n := len(dst)
 
 	for i := 0; i < n; i++ {
 		value, valid, err := ego.producer.Get()
 		if err != nil || !valid {
 			return i, err
 		}
-		p[i] = value
+		dst[i] = value
 	}
 
 	return n, nil

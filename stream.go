@@ -6,11 +6,11 @@ type Closable interface {
 }
 
 type Writer[T any] interface {
-	Write(p ...T) (int, error)
+	Write(value ...T) (int, error)
 }
 
 type Reader[T any] interface {
-	Read(dest []T) (int, error)
+	Read(dst []T) (int, error)
 }
 
 type Collector[T any] interface {
@@ -26,8 +26,8 @@ type Producer[T any] interface {
 	Reader[T]
 	Collector[T]
 	Iterator[T]
-	Get() (value T, valid bool, err error)
-	Pipe(Consumer[T]) Consumer[T]
+	Get() (T, bool, error)
+	Pipe(c Consumer[T]) Consumer[T]
 }
 
 type ChanneledProducer[T any] interface {
@@ -38,7 +38,7 @@ type ChanneledProducer[T any] interface {
 type Consumer[T any] interface {
 	SetSource(s Producer[T]) error
 	CanSetSource() bool
-	Consume() (value T, valid bool, err error)
+	Consume() (T, bool, error)
 }
 
 type Transformer[T, U any] interface {
@@ -59,7 +59,7 @@ type Duplexer[T any] interface {
 
 type Splitter[T any] interface {
 	Consumer[T]
-	Out(string) Producer[T]
+	Out(name string) Producer[T]
 }
 
 type Merger[T any] interface {
