@@ -1,3 +1,3 @@
 go 1.20
 
-module stream
+module github.com/SpongeData-cz/stream

@@ -8,9 +8,10 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	. "stream"
 	"sync"
 	"testing"
+
+	. "github.com/SpongeData-cz/stream"
 )
 
 const (
