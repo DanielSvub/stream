@@ -15,7 +15,7 @@ func NewFilter[T any](fn func(T) bool) Filter[T] {
 
 func (ego *filter[T]) Get() (value T, valid bool, err error) {
 	value, valid, err = ego.Consume()
-	for !ego.filter(value) && err == nil && valid {
+	for err == nil && valid && !ego.filter(value) {
 		value, valid, err = ego.Consume()
 	}
 	if !valid || err != nil {
