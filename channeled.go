@@ -6,14 +6,13 @@ import (
 )
 
 type channeledInput[T any] struct {
-	DefaultClosable
+	closed bool
 	DefaultProducer[T]
-	channel  chan T
-	capacity int
+	channel chan T
 }
 
-func NewChanneledInput[T any](capacity int) *channeledInput[T] {
-	ego := &channeledInput[T]{DefaultClosable: DefaultClosable{false}, channel: make(chan T, capacity), capacity: capacity}
+func NewChanneledInput[T any](capacity int) ChanneledInput[T] {
+	ego := &channeledInput[T]{channel: make(chan T, capacity)}
 	ego.DefaultProducer = *NewDefaultProducer[T](ego)
 	return ego
 }
@@ -29,15 +28,19 @@ func (ego *channeledInput[T]) Get() (value T, valid bool, err error) {
 
 func (ego *channeledInput[T]) Close() {
 	close(ego.channel)
-	ego.DefaultClosable.Close()
+	ego.closed = true
+}
+
+func (ego *channeledInput[T]) Closed() bool {
+	return ego.closed && len(ego.channel) == 0
 }
 
 func (ego *channeledInput[T]) Write(value ...T) (n int, err error) {
+
 	if value == nil {
 		return 0, errors.New("input slice is not initialized")
 	}
 
-	//defer to catch writing to closed channel or simmilar panicing problems (are there any simmilar?)
 	defer func() {
 		if r := recover(); r != nil {
 			switch e := r.(type) {
@@ -49,9 +52,11 @@ func (ego *channeledInput[T]) Write(value ...T) (n int, err error) {
 		}
 	}()
 
-	for i, v := range value {
+	for _, v := range value {
 		ego.Channel() <- v
-		n = i + 1
 	}
-	return len(value), err
+
+	n = len(value)
+	return
+
 }
