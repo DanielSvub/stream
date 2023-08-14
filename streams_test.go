@@ -199,7 +199,7 @@ func TestStream(t *testing.T) {
 
 	t.Run("Duplex", func(t *testing.T) {
 		inS := NewChanneledInput[int](testDataSize)
-		dupS := NewMultiplexer[int](2, testDataSize)
+		dupS := NewMultiplexer[int](testDataSize, 2)
 		inS.Pipe(dupS)
 
 		data := make([]int, testDataSize)
@@ -244,7 +244,7 @@ func TestStream(t *testing.T) {
 	t.Run("Binary split", func(t *testing.T) {
 		predicate := func(a int) bool { return a%2 == 0 }
 		inS := NewChanneledInput[int](testDataSize)
-		outS := NewBinarySplitter(10, predicate)
+		outS := NewSplitter(10, predicate)
 		inS.Pipe(outS)
 
 		data := make([]int, testDataSize)
@@ -254,8 +254,8 @@ func TestStream(t *testing.T) {
 		}
 		inS.Close()
 
-		posChan := outS.Out("positive").(ChanneledProducer[int])
-		negChan := outS.Out("negative").(ChanneledProducer[int])
+		posChan := outS.If(0).(ChanneledProducer[int])
+		negChan := outS.Else().(ChanneledProducer[int])
 		count := 0
 		posValid := true
 		negValid := true
@@ -285,7 +285,7 @@ func TestStream(t *testing.T) {
 			t.Error(testDataSize, "values on input but", count, "values on output.")
 		}
 
-		value, valid, err := outS.Out("positive").Get()
+		value, valid, err := outS.If(0).Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -293,7 +293,7 @@ func TestStream(t *testing.T) {
 			t.Error("unexpected error", err)
 		}
 
-		value, valid, err = outS.Out("negative").Get()
+		value, valid, err = outS.Else().Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -308,18 +308,16 @@ func TestStream(t *testing.T) {
 		predicate5 := func(a int) bool { return a%5 == 0 }
 		predicate7 := func(a int) bool { return a%7 == 0 }
 		inS := NewChanneledInput[int](testDataSize)
-		predicates := map[string]func(int) bool{}
-		predicates["2"] = predicate2
-		predicates["3"] = predicate3
-		predicates["5"] = predicate5
-		predicates["7"] = predicate7
+		predicates := []func(int) bool{predicate2, predicate3, predicate5, predicate7}
 
-		order := []string{"2", "3", "5", "7"}
+		const (
+			p2 = iota
+			p3
+			p5
+			p7
+		)
 
-		outS, err := NewSplitter(predicates, order, 100)
-		if err != nil {
-			t.Error("unexpected error ", err)
-		}
+		outS := NewSplitter(100, predicates...)
 		inS.Pipe(outS)
 
 		data := make([]int, testDataSize)
@@ -329,11 +327,11 @@ func TestStream(t *testing.T) {
 		}
 		inS.Close()
 
-		chan2 := outS.Out("2").(ChanneledProducer[int])
-		chan3 := outS.Out("3").(ChanneledProducer[int])
-		chan5 := outS.Out("5").(ChanneledProducer[int])
-		chan7 := outS.Out("7").(ChanneledProducer[int])
-		chanDef := outS.Out("_default").(ChanneledProducer[int])
+		chan2 := outS.If(p2).(ChanneledProducer[int])
+		chan3 := outS.If(p3).(ChanneledProducer[int])
+		chan5 := outS.If(p5).(ChanneledProducer[int])
+		chan7 := outS.If(p7).(ChanneledProducer[int])
+		chanDef := outS.Else().(ChanneledProducer[int])
 
 		count := 0
 		valid := map[string]bool{}
@@ -395,43 +393,14 @@ func TestStream(t *testing.T) {
 		if count != testDataSize {
 			t.Error(testDataSize, "values on input but", count, "values on output.")
 		}
-		for _, name := range order {
-			value, validity, err := outS.Out(name).Get()
+		for i := range predicates {
+			value, validity, err := outS.If(i).Get()
 			if validity {
-				t.Error("Unexpected valid data red", value, " in output ", name)
+				t.Error("Unexpected valid data red", value, " in output ", i)
 			}
 			if err != nil {
-				t.Error("unexpected error", err, " in output ", name)
+				t.Error("unexpected error", err, " in output ", i)
 			}
-		}
-
-	})
-
-	t.Run("Split wrong initialization", func(t *testing.T) {
-		predicate2 := func(a int) bool { return a%2 == 0 }
-		predicate3 := func(a int) bool { return a%3 == 0 }
-		predicate5 := func(a int) bool { return a%5 == 0 }
-		predicate7 := func(a int) bool { return a%7 == 0 }
-		predicates := map[string]func(int) bool{}
-
-		predicates["2"] = predicate2
-		predicates["3"] = predicate3
-		predicates["5"] = predicate5
-		predicates["7"] = predicate7
-
-		_, err := NewSplitter(predicates, []string{"2", "3", "5"}, 100)
-		if err == nil {
-			t.Error("Should be error (evalOrder does not contain 7")
-		}
-
-		_, err = NewSplitter(predicates, []string{"2", "3", "5", "7", "10"}, 100)
-		if err == nil {
-			t.Error("Should be error (evalOrder contains 10 not known to predicates")
-		}
-		predicates["_default"] = predicate2
-		_, err = NewSplitter(predicates, []string{"2", "3", "5", "7", "_default"}, 100)
-		if err == nil {
-			t.Error("Should be error (predicate named _default is not allowed")
 		}
 
 	})
@@ -520,7 +489,7 @@ func TestStream(t *testing.T) {
 
 		//streams (pipeline mebers)
 		inS := NewChanneledInput[int](10)
-		dupS := NewMultiplexer[int](2, 10)
+		dupS := NewMultiplexer[int](10, 2)
 		filEven := NewFilter(filterEven)
 		filOdd := NewFilter(filterOdd)
 		traEven := NewTransformer(transformEven)

@@ -1,90 +1,57 @@
 package stream
 
-import (
-	"errors"
-	"fmt"
-
-	"golang.org/x/exp/slices"
-)
-
 type splitter[T any] struct {
 	DefaultConsumer[T]
-	predicates map[string]func(T) bool
-	outputs    map[string]*channeledInput[T]
-	evalOrder  []string
+	predicates    []func(T) bool
+	outputs       []ChanneledInput[T]
+	defaultOutput ChanneledInput[T]
 }
 
-// NewSplitter creates new Splitter with output stream for each specified predicate
-// Predicates are evaluated in the specified evalOrder for each passing value. Value is always sent to the output associated with the first predicate to return true.
-// There is "_default" output which is used if value does not pass any of supplied predicates.
-// Do not use "_default" as predicate name - it is always a fallback stream and the outptus would behave unexpectedly-
-func NewSplitter[T any](predicates map[string]func(T) bool, evalOrder []string, capacity int) (Splitter[T], error) {
-	for _, n := range evalOrder {
-		if predicates[n] == nil {
-			return nil, fmt.Errorf("undefined predicate in eval order: %s", n)
-		}
+func NewSplitter[T any](capacity int, fn ...func(T) bool) Splitter[T] {
+	branches := len(fn)
+	ego := &splitter[T]{}
+	ego.predicates = fn
+	ego.outputs = make([]ChanneledInput[T], branches)
+	for i := 0; i < branches; i++ {
+		ego.outputs[i] = NewChanneledInput[T](capacity)
 	}
-
-	for n := range predicates {
-		if !slices.Contains(evalOrder, n) {
-			return nil, fmt.Errorf("predicate name not in eval order: %s", n)
-		}
-	}
-	if predicates["_default"] != nil {
-		return nil, errors.New("predicate named \"_default\" is not allowed")
-	}
-
-	res := &splitter[T]{predicates: predicates, evalOrder: evalOrder, outputs: map[string]*channeledInput[T]{}}
-	for n := range predicates {
-		res.outputs[n] = NewChanneledInput[T](capacity)
-	}
-	res.outputs["_default"] = NewChanneledInput[T](capacity)
-	return res, nil
-}
-
-// NewBinarySplitter returns Splitter with only two branches - positive and negative.
-func NewBinarySplitter[T any](buffersCapacity int, predicate func(T) bool) Splitter[T] {
-	predMap := map[string]func(T) bool{}
-	predMap["positive"] = predicate
-	predMap["negative"] = func(a T) bool { return !predicate(a) }
-	res := splitter[T]{predicates: predMap, outputs: map[string]*channeledInput[T]{}, evalOrder: []string{"positive", "negative"}}
-	res.outputs["negative"] = NewChanneledInput[T](buffersCapacity)
-	res.outputs["positive"] = NewChanneledInput[T](buffersCapacity)
-	return &res
+	ego.defaultOutput = NewChanneledInput[T](capacity)
+	return ego
 }
 
 func (ego *splitter[T]) pipeData() {
 
-	var value T
-	var err error
-	valid := true
-
-	for _, o := range ego.outputs {
-		defer o.Close()
+	defer ego.defaultOutput.Close()
+	for _, output := range ego.outputs {
+		defer output.Close()
 	}
 
-	for valid {
-		if value, valid, err = ego.Consume(); err != nil || !valid {
+pipe:
+	for {
+		value, valid, err := ego.Consume()
+		if err != nil || !valid {
 			return
 		}
-		sent := false
-		for _, n := range ego.evalOrder {
-			if ego.predicates[n](value) {
-				ego.outputs[n].Write(value)
-				sent = true
-				break
+		for i, output := range ego.outputs {
+			if ego.predicates[i](value) {
+				output.Write(value)
+				continue pipe
 			}
 		}
-		if !sent {
-			ego.outputs["_default"].Write(value)
-			sent = true
-		}
+		ego.defaultOutput.Write(value)
 	}
 
 }
 
-func (ego *splitter[T]) Out(name string) Producer[T] {
-	return ego.outputs[name]
+func (ego *splitter[T]) If(index int) Producer[T] {
+	if len(ego.outputs) <= index {
+		return nil
+	}
+	return ego.outputs[index]
+}
+
+func (ego *splitter[T]) Else() Producer[T] {
+	return ego.defaultOutput
 }
 
 func (ego *splitter[T]) SetSource(s Producer[T]) error {

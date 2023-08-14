@@ -5,7 +5,7 @@ type multiplexer[T any] struct {
 	outputs []ChanneledInput[T]
 }
 
-func NewMultiplexer[T any](branches int, capacity int) Multiplexer[T] {
+func NewMultiplexer[T any](capacity int, branches int) Multiplexer[T] {
 	ego := &multiplexer[T]{}
 	ego.outputs = make([]ChanneledInput[T], branches)
 	for i := 0; i < branches; i++ {
