@@ -14,7 +14,7 @@ type channeledMerger[T any] struct {
 	overflowBuffer []T
 }
 
-func NewChanneledMerger[T any](autoclose bool, capacity int) *channeledMerger[T] {
+func NewChanneledMerger[T any](capacity int, autoclose bool) *channeledMerger[T] {
 	return &channeledMerger[T]{
 		autoclose:      autoclose,
 		sources:        make([]Producer[T], 0),
