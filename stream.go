@@ -58,8 +58,8 @@ type Multiplexer[T any] interface {
 
 type Splitter[T any] interface {
 	Consumer[T]
-	If(index int) Producer[T]
-	Else() Producer[T]
+	Cond(index int) Producer[T]
+	Default() Producer[T]
 }
 
 type Merger[T any] interface {

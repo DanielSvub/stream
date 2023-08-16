@@ -43,14 +43,14 @@ pipe:
 
 }
 
-func (ego *splitter[T]) If(index int) Producer[T] {
+func (ego *splitter[T]) Cond(index int) Producer[T] {
 	if len(ego.outputs) <= index {
 		return nil
 	}
 	return ego.outputs[index]
 }
 
-func (ego *splitter[T]) Else() Producer[T] {
+func (ego *splitter[T]) Default() Producer[T] {
 	return ego.defaultOutput
 }
 

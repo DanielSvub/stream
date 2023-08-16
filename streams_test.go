@@ -255,8 +255,8 @@ func TestStream(t *testing.T) {
 		}
 		inS.Close()
 
-		posChan := outS.If(0).(ChanneledProducer[int])
-		negChan := outS.Else().(ChanneledProducer[int])
+		posChan := outS.Cond(0).(ChanneledProducer[int])
+		negChan := outS.Default().(ChanneledProducer[int])
 		count := 0
 		posValid := true
 		negValid := true
@@ -286,7 +286,7 @@ func TestStream(t *testing.T) {
 			t.Error(testDataSize, "values on input but", count, "values on output.")
 		}
 
-		value, valid, err := outS.If(0).Get()
+		value, valid, err := outS.Cond(0).Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -294,7 +294,7 @@ func TestStream(t *testing.T) {
 			t.Error("unexpected error", err)
 		}
 
-		value, valid, err = outS.Else().Get()
+		value, valid, err = outS.Default().Get()
 		if valid {
 			t.Error("Unexpected valid data red", value)
 		}
@@ -328,11 +328,11 @@ func TestStream(t *testing.T) {
 		}
 		inS.Close()
 
-		chan2 := outS.If(p2).(ChanneledProducer[int])
-		chan3 := outS.If(p3).(ChanneledProducer[int])
-		chan5 := outS.If(p5).(ChanneledProducer[int])
-		chan7 := outS.If(p7).(ChanneledProducer[int])
-		chanDef := outS.Else().(ChanneledProducer[int])
+		chan2 := outS.Cond(p2).(ChanneledProducer[int])
+		chan3 := outS.Cond(p3).(ChanneledProducer[int])
+		chan5 := outS.Cond(p5).(ChanneledProducer[int])
+		chan7 := outS.Cond(p7).(ChanneledProducer[int])
+		chanDef := outS.Default().(ChanneledProducer[int])
 
 		count := 0
 		valid := map[string]bool{}
@@ -395,7 +395,7 @@ func TestStream(t *testing.T) {
 			t.Error(testDataSize, "values on input but", count, "values on output.")
 		}
 		for i := range predicates {
-			value, validity, err := outS.If(i).Get()
+			value, validity, err := outS.Cond(i).Get()
 			if validity {
 				t.Error("Unexpected valid data red", value, " in output ", i)
 			}
