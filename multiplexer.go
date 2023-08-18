@@ -1,10 +1,27 @@
 package stream
 
+/*
+Implements:
+  - Multiplexer
+*/
 type multiplexer[T any] struct {
 	DefaultConsumer[T]
 	outputs []ChanneledInput[T]
 }
 
+/*
+NewMultiplexer is a constructor of the multiplexer.
+
+Type parameters:
+  - T - type of the consumed and produced values.
+
+Parameters:
+  - capacity - size of the channel buffer,
+  - branches - number of the output streams.
+
+Returns:
+  - pointer to the new multiplexer.
+*/
 func NewMultiplexer[T any](capacity int, branches int) Multiplexer[T] {
 	ego := &multiplexer[T]{}
 	ego.outputs = make([]ChanneledInput[T], branches)
@@ -14,6 +31,11 @@ func NewMultiplexer[T any](capacity int, branches int) Multiplexer[T] {
 	return ego
 }
 
+/*
+Consumes the data from the source Producer and pushes them to the result streams.
+Every value is pushed to all streams.
+It runs asynchronously.
+*/
 func (ego *multiplexer[T]) pipeData() {
 
 	for _, output := range ego.outputs {

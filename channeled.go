@@ -5,12 +5,28 @@ import (
 	"fmt"
 )
 
+/*
+Implements:
+  - ChanneledInput
+*/
 type channeledInput[T any] struct {
 	closed bool
 	DefaultProducer[T]
 	channel chan T
 }
 
+/*
+NewChanneledInput is a constructor of the channeled input.
+
+Type parameters:
+  - T - type of the produced values.
+
+Parameters:
+  - capacity - size of the channel buffer.
+
+Returns:
+  - pointer to the new channeled input.
+*/
 func NewChanneledInput[T any](capacity int) ChanneledInput[T] {
 	ego := &channeledInput[T]{channel: make(chan T, capacity)}
 	ego.DefaultProducer = *NewDefaultProducer[T](ego)
@@ -35,9 +51,9 @@ func (ego *channeledInput[T]) Closed() bool {
 	return ego.closed && len(ego.channel) == 0
 }
 
-func (ego *channeledInput[T]) Write(value ...T) (n int, err error) {
+func (ego *channeledInput[T]) Write(values ...T) (n int, err error) {
 
-	if value == nil {
+	if values == nil {
 		return 0, errors.New("input slice is not initialized")
 	}
 
@@ -52,11 +68,11 @@ func (ego *channeledInput[T]) Write(value ...T) (n int, err error) {
 		}
 	}()
 
-	for _, v := range value {
+	for _, v := range values {
 		ego.Channel() <- v
 	}
 
-	n = len(value)
+	n = len(values)
 	return
 
 }

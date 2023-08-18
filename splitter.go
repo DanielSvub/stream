@@ -1,5 +1,9 @@
 package stream
 
+/*
+Implements:
+  - Splitter
+*/
 type splitter[T any] struct {
 	DefaultConsumer[T]
 	predicates    []func(T) bool
@@ -7,6 +11,19 @@ type splitter[T any] struct {
 	defaultOutput ChanneledInput[T]
 }
 
+/*
+NewSplitter is a constructor of the splitter.
+
+Type parameters:
+  - T - type of the consumed and produced values.
+
+Parameters:
+  - capacity - size of the channel buffer,
+  - fn - any amount of conditional functions.
+
+Returns:
+  - pointer to the new splitter.
+*/
 func NewSplitter[T any](capacity int, fn ...func(T) bool) Splitter[T] {
 	branches := len(fn)
 	ego := &splitter[T]{}
@@ -19,6 +36,12 @@ func NewSplitter[T any](capacity int, fn ...func(T) bool) Splitter[T] {
 	return ego
 }
 
+/*
+Consumes the data from the source Producer and pushes them to the result streams.
+Each value is pushed to exactly one of the streams depending on the conditional functions.
+If the value does not satisfy any of the conditions, it is pushed to the default stream.
+It runs asynchronously.
+*/
 func (ego *splitter[T]) pipeData() {
 
 	defer ego.defaultOutput.Close()

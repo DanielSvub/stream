@@ -1,5 +1,9 @@
 package stream
 
+/*
+Implements:
+  - Filter
+*/
 type filter[T any] struct {
 	DefaultConsumer[T]
 	DefaultProducer[T]
@@ -7,6 +11,18 @@ type filter[T any] struct {
 	filter func(T) bool
 }
 
+/*
+NewFilter is a constructor of the filter.
+
+Type parameters:
+  - T - type of the consumed and produced values.
+
+Parameters:
+  - fn - filter function.
+
+Returns:
+  - pointer to the new filter.
+*/
 func NewFilter[T any](fn func(T) bool) Filter[T] {
 	ego := &filter[T]{filter: fn}
 	ego.DefaultProducer = *NewDefaultProducer[T](ego)
