@@ -23,7 +23,7 @@ The flow of the data has to be terminated at some point. Thus each producer can 
 
 ### Inputs
 
-Inputs serve as a source of the data (first producer in the pipeline). They can be created by implementing the ``Producer`` interface. This library contains one pre-implemented input, ``BufferInput``. TIn this case, the source of the data is a buffered channel of a defined capacity. The data are passed to the stream by *Write* method. The method can be called multiple times. If the buffer is full, the program waits for some space to be freed. When the writing is done, the stream has to be manually closed.
+Inputs serve as a source of the data (first producer in the pipeline). They can be created by implementing the ``Producer`` interface. This library contains one pre-implemented input, ``BufferInput``. In this case, the source of the data is a buffered channel of a defined capacity. The data are passed to the stream by ``Write`` method. The method can be called multiple times. If the buffer is full, the program waits for some space to be freed. When the writing is done, the stream has to be manually closed.
 
 ```go
 s := stream.NewChanneledInput[int](3)
@@ -87,7 +87,7 @@ if err := s.ForEach(func(value int) error {
 
 ### Transformer
 
-The transformer works as a *map* method in many programming languages. Each item of the stream is modified by the given transformation function. The output can be of a different type than the input.
+The transformer works as a map method in many programming languages. Each item of the stream is modified by the given transformation function. The output can be of a different type than the input.
 
 ```go
 t := stream.NewTransformer(func(x int) int {
