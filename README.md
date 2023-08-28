@@ -15,7 +15,7 @@ Some streams are both producer and consumer. Those are called *two-sided* and ar
 - **Splitter -** splits one stream into multiple based on certain conditions,
 - **Merger -** merges multiple streams into one.
 
-They can be connected together arbitrarily, which creates the pipeline. To move the data to/from the pipeline, *inputs* and *outputs* are used. The input loads data from the outside (Golang variable, file, remote API, etc.) and serves as a starting producer. The output serves as a final consumer, exporting the data to an external resource (not required for storing to a variable though, as every producer is readable - will be explained in [Usage section](#reading-data)).
+They can be connected together arbitrarily, which creates the pipeline. To move the data to and from the pipeline, *inputs* and *outputs* are used. The input loads data from the outside (Golang variable, file, remote API, etc.) and serves as a starting producer. The output serves as a final consumer, exporting the data to an external resource (not required for storing to a variable though, as every producer is readable - will be explained in [Usage section](#reading-data)).
 
 The flow of the data has to be terminated at some point. Thus each producer can be in two states - open or closed. The stream is closed, when there is no more data to read. The closed state propagates from the start to the end of the pipeline, until the sink is closed, what makes the whole process to end.
 
@@ -48,16 +48,14 @@ for valid {
 }
 ```
 
-- ``Read`` - reads a concrete amount of values to a given slice (provided by ``Reader`` interface),
+- ``Read`` - reads up to a concrete amount of values to a given slice (provided by ``Reader`` interface),
 ```go
 out := make([]int, 3)
 if n, err := s.Read(out); err != nil {
 	panic(err)
-} else if n < 3 {
-	panic("not enough values")
 } else {
-	for _, value := range out {
-		fmt.Println(value)
+	for i := 0; i < n; i++ {
+		fmt.Println(out[i])
 	}
 }
 ```
