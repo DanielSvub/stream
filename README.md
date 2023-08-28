@@ -1,6 +1,6 @@
 # Stream
 
-This package provides lazy generic data streams. Data are not loaded until they are needed, which allows to process a large amount of data with constant space complexity. The data flow is modelled by a so-called *pipeline*. The processing of the data is initiated by reading from the sink, the end of the pipeline (there may be more of them, as the pipeline can be branched).
+This package provides lazy generic data streams. Data are not loaded until they are needed, which allows to process a large amount of data with constant space complexity. The data flow is modelled by a so-called *pipeline*. The processing of the data is initiated by reading from the end of the pipeline (any such end is called a *sink*). There may be more sinks, as the pipeline can be branched.
 
 Stream is an entity in the pipeline. There are two main kinds of streams:
 
@@ -37,14 +37,14 @@ Data can be read from any producer. There are 4 methods usable to do this:
 
 - ``Get`` - acquires a single value together with information whether the value is valid (direct approach),
 ```go
-var value int
-var err error
-valid := true
+if value, valid, err := s.Get(); err != nil {
+	panic(err)
+}
 for valid {
+	fmt.Println(value)
 	if value, valid, err = s.Get(); err != nil {
 		panic(err)
 	}
-	fmt.Println(value)
 }
 ```
 
@@ -98,7 +98,7 @@ s.Pipe(t)
 
 ### Filter
 
-The filter simply filters the data by dropping all items for which the given function returns false.
+The filter simply filters the data by dropping all items not satisfying the given predicate (for which the given function returns false).
 
 ```go
 f := stream.NewFilter(func(x int) bool {
@@ -122,7 +122,7 @@ b1 := m.Out(1)
 
 ### Splitter
 
-The splitter is similar to multiplexer, but each item is written to only one of the nested channeled inputs, depending on which of the given conditions is the first satisfied by the item's value. If the value does not satisfy any of the conditions, it goes to the default branch. The outputs are accessed by calling the ``Cond`` and ``Default`` methods.
+The splitter is similar to multiplexer, but each item is written to only one of the nested channeled inputs, depending on which of the given conditions is the first one satisfied by the item's value. If the value does not satisfy any of the conditions, it goes to the default branch. The outputs are accessed by calling the ``Cond`` and ``Default`` methods.
 
 ```go
 capacity := 3
@@ -156,7 +156,7 @@ The package provides tools to conveniently create your own implementations of al
 
 ### Inputs
 
-Custom inputs can be created by implementing the ``Producer`` interface. For this purpose, the ``DefaultProducer`` struct is available to use. It defines all methods of the producer interface excluding ``Get`` thich defines the concrete way of acquiring the data. To insert a simple closing mechanism, the ``DefaultClosable`` struct can be used. Example:
+Custom inputs can be created by implementing the ``Producer`` interface. For this purpose, the ``DefaultProducer`` struct is available to use. It defines all methods of the producer interface excluding ``Get`` which defines the concrete way of acquiring the data. To insert a simple closing mechanism, the ``DefaultClosable`` struct can be used. Example:
 
 ```go
 type RandomIntInput struct {
@@ -219,10 +219,11 @@ input.Pipe(transformer)
 result, err := transformer.Collect()
 ```
 
-2. Parallelly creates a million of numbers and prints them increased by 1. Only one integer is stored in memory at the time.
+2. Creates a million of numbers and prints them increased by 1. Generating and reading run in parallel, so only one integer is stored in memory at the time (because of the unbuffered channel).
 
 ```go
-input := stream.NewChanneledInput[int](0)
+capacity := 0
+input := stream.NewChanneledInput[int](capacity)
 transformer := stream.NewTransformer(func(x int) int {
 	return x + 1
 })
