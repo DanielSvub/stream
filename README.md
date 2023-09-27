@@ -17,13 +17,15 @@ Some streams are both producer and consumer. Those are called *two-sided* and ar
 
 They can be connected together arbitrarily, which creates the pipeline. To move the data to and from the pipeline, *inputs* and *outputs* are used. The input loads data from the outside (Golang variable, file, remote API, etc.) and serves as a starting producer. The output serves as a final consumer, exporting the data to an external resource (not required for storing to a variable though, as every producer is readable - will be explained in [Usage section](#reading-data)).
 
+![Example of a pipeline](pipeline.svg)
+
 The flow of the data has to be terminated at some point. Thus each producer can be in two states - open or closed. The stream is closed, when there is no more data to read. The closed state propagates from the start to the end of the pipeline, until the sink is closed, what makes the whole process to end.
 
 ## Usage
 
 ### Inputs
 
-Inputs serve as a source of the data (first producer in the pipeline). They can be created by implementing the ``Producer`` interface. This library contains one pre-implemented input, ``BufferInput``. In this case, the source of the data is a buffered channel of a defined capacity. The data are passed to the stream by ``Write`` method. The method can be called multiple times. If the buffer is full, the program waits for some space to be freed. When the writing is done, the stream has to be manually closed.
+Inputs serve as a source of the data (first producer in the pipeline). They can be created by implementing the ``Producer`` interface. This library contains one pre-implemented input, ``ChanneledInput``. In this case, the source of the data is a buffered channel of a defined capacity. The data are passed to the stream by ``Write`` method. The method can be called multiple times. If the buffer is full, the program waits for some space to be freed. When the writing is done, the stream has to be manually closed.
 
 ```go
 s := stream.NewChanneledInput[int](3)
