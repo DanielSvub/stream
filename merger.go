@@ -16,7 +16,7 @@ type channeledMerger[T any] struct {
 	sources        []ChanneledProducer[T]
 	autoclose      bool
 	sourcesLock    sync.Mutex
-	overflowBuffer []T
+	nextToReadFrom int
 }
 
 /*
@@ -73,18 +73,17 @@ func (ego *channeledMerger[T]) unsetSource(s Producer[T]) {
 
 func (ego *channeledMerger[T]) SetSource(s Producer[T]) error {
 
-	defer ego.sourcesLock.Unlock()
-	ego.sourcesLock.Lock()
 	if ego.Closed() {
 		return errors.New("the stream is already closed")
 	}
 
 	chp, ischanneled := s.(ChanneledProducer[T])
 	if ischanneled {
-
+		ego.sourcesLock.Lock()
 		ego.sources = append(ego.sources, chp)
+		ego.sourcesLock.Unlock()
 	} else {
-		chp := NewChanneledInput[T](1)
+		chp := NewChanneledInput[T](0)
 		go func() {
 			for {
 
@@ -97,28 +96,21 @@ func (ego *channeledMerger[T]) SetSource(s Producer[T]) error {
 				//source is exhausted
 				if !valid {
 					chp.Close()
+					return
 				}
 
 				if err != nil {
 					log.Default().Println(err)
 					return
 				}
-
-				// It may happen that the routine was waiting on get while the merge stream got closed. Then we send the delayed data to overflowBuffer and then serve them through Get().
-				defer func() {
-					if r := recover(); r != nil {
-						ego.overflowBuffer = append(ego.overflowBuffer, value)
-						log.Default().Println("Channel closed externally, extra data sent to overflow buffer.", r, value)
-					}
-				}()
 				chp.Channel() <- value
 			}
 
 		}()
+		ego.sourcesLock.Lock()
 		ego.sources = append(ego.sources, chp)
+		ego.sourcesLock.Unlock()
 	}
-
-	//go ego.merge(s)
 
 	return nil
 
@@ -135,35 +127,35 @@ func (ego *channeledMerger[T]) Close() {
 	ego.DefaultClosable.Close()
 }
 
-var nextToReadFrom int = 0
-
 func (ego *channeledMerger[T]) Consume() (value T, valid bool, err error) {
 	//TODO beware: this is active waiting
+	//The merger implementation has been  changed from original lazy implementation to decrease existing  goroutine number -> now we create goroutine only for nonchanneled sources
+	//In the original implementation each source had its own goroutine - it was waiting on sources get, until value appearead, then it pushed it into merger's output buffer (see older commits - cca 14.9.2023).
+	//The price to pay is this active polling of sources in round robin style
 	for {
-		//has to be locked inside for loop so sources can be added between iterations
+		//has to be locked inside loop so sources can be added/removed between iterations
 		ego.sourcesLock.Lock()
 		if len(ego.sources) == 0 {
 			ego.sourcesLock.Unlock()
 			break
 		}
-		nextToReadFrom = (nextToReadFrom + 1) % len(ego.sources)
+		ego.nextToReadFrom = (ego.nextToReadFrom + 1) % len(ego.sources)
 		select {
-		case value, valid := <-ego.sources[nextToReadFrom].Channel():
-			ego.sourcesLock.Unlock()
+		case value, valid := <-ego.sources[ego.nextToReadFrom].Channel():
 			if !valid {
-				ego.unsetSource(ego.sources[nextToReadFrom])
+				toUnset := ego.sources[ego.nextToReadFrom]
+				ego.sourcesLock.Unlock()
+				ego.unsetSource(toUnset)
+				continue
+			} else {
+				ego.sourcesLock.Unlock()
+				return value, valid, nil
 			}
-			return value, valid, nil
+
 		default:
 			ego.sourcesLock.Unlock()
 			continue
 		}
-	}
-	if !valid && len(ego.overflowBuffer) > 0 {
-		value = ego.overflowBuffer[0]
-		ego.overflowBuffer = ego.overflowBuffer[1:]
-		valid = true
-		return value, valid, nil
 	}
 	if ego.Closed() {
 		return *new(T), false, nil

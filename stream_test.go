@@ -530,7 +530,7 @@ func TestStream(t *testing.T) {
 
 		}
 
-		// sort data red fro the pipeline for easy comaprison with expectations
+		// sort data red from the pipeline for easy comparison with expectations
 		sort.Slice(dataRed, func(i, j int) bool {
 			return dataRed[i] < dataRed[j]
 		})
