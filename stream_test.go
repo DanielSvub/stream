@@ -109,8 +109,8 @@ func TestStream(t *testing.T) {
 			}
 		}
 		inS := NewChanneledInput[int](testDataSize)
-		traS := NewTransformer[int, string](transform)
-		outS := NewTransformer[string, int](inverse)
+		traS := NewTransformer(transform)
+		outS := NewTransformer(inverse)
 		inS.Pipe(traS).(Producer[string]).Pipe(outS)
 
 		data := make([]int, testDataSize)
@@ -406,7 +406,7 @@ func TestStream(t *testing.T) {
 	t.Run("Merge (general functionality, autoclose)", func(t *testing.T) {
 		inputsCount := 10
 		inS := make([]ChanneledInput[int], inputsCount)
-		mergeS := NewChanneledMerger[int](inputsCount, true)
+		mergeS := NewActiveMerger[int](true)
 		for i := 0; i < inputsCount; i++ {
 			inS[i] = NewChanneledInput[int](testDataSize)
 			inS[i].Pipe(mergeS)
@@ -451,7 +451,7 @@ func TestStream(t *testing.T) {
 	t.Run("Merge force close", func(t *testing.T) {
 		inputsCount := 10
 		inS := make([]ChanneledInput[int], inputsCount)
-		mergeS := NewChanneledMerger[int](inputsCount, false)
+		mergeS := NewActiveMerger[int](false)
 		for i := 0; i < inputsCount; i++ {
 			inS[i] = NewChanneledInput[int](testDataSize)
 			inS[i].Pipe(mergeS)
@@ -492,7 +492,7 @@ func TestStream(t *testing.T) {
 		filOdd := NewFilter(filterOdd)
 		traEven := NewTransformer(transformEven)
 		traOdd := NewTransformer(transformOdd)
-		merS := NewChanneledMerger[int](10, true)
+		merS := NewActiveMerger[int](true)
 
 		//prepare pipeline
 		inS.Pipe(dupS)

@@ -10,7 +10,7 @@ import (
 Implements:
   - Merger
 */
-type channeledMerger[T any] struct {
+type activeMerger[T any] struct {
 	DefaultClosable
 	DefaultProducer[T]
 	sources        []ChanneledProducer[T]
@@ -20,21 +20,22 @@ type channeledMerger[T any] struct {
 }
 
 /*
-NewChanneledMerge is a constructor of the channeled merger.
-Channeled merger is a merger implementation based on ChanneledInput.
+NewActiveMerger creates new activeMerger.
+
+	activeMerger is merger which actively in round-robin style polls attached sources (producers) in it's get.
+	Beware that if attached source is not channeled then new goroutine is spawned to push data through channel the merger can select on.
 
 Type parameters:
   - T - type of the consumed and produced values.
 
 Parameters:
-  - capacity - size of the channel buffer,
   - autoclose - if true, the stream closes automatically when all attached streams close.
 
 Returns:
   - pointer to the new merger.
 */
-func NewChanneledMerger[T any](capacity int, autoclose bool) Merger[T] {
-	ego := &channeledMerger[T]{
+func NewActiveMerger[T any](autoclose bool) Merger[T] {
+	ego := &activeMerger[T]{
 		autoclose:   autoclose,
 		sources:     make([]ChanneledProducer[T], 0),
 		sourcesLock: sync.Mutex{},
@@ -49,7 +50,7 @@ Unsets the source stream.
 Parameters:
   - s - stream to unset.
 */
-func (ego *channeledMerger[T]) unsetSource(s Producer[T]) {
+func (ego *activeMerger[T]) unsetSource(s Producer[T]) {
 
 	if ego.Closed() {
 		return
@@ -71,7 +72,7 @@ func (ego *channeledMerger[T]) unsetSource(s Producer[T]) {
 
 }
 
-func (ego *channeledMerger[T]) SetSource(s Producer[T]) error {
+func (ego *activeMerger[T]) SetSource(s Producer[T]) error {
 
 	if ego.Closed() {
 		return errors.New("the stream is already closed")
@@ -116,22 +117,22 @@ func (ego *channeledMerger[T]) SetSource(s Producer[T]) error {
 
 }
 
-func (ego *channeledMerger[T]) CanSetSource() bool {
+func (ego *activeMerger[T]) CanSetSource() bool {
 	return true
 }
 
-func (ego *channeledMerger[T]) Close() {
+func (ego *activeMerger[T]) Close() {
 	for _, s := range ego.sources {
 		ego.unsetSource(s)
 	}
 	ego.DefaultClosable.Close()
 }
 
-func (ego *channeledMerger[T]) Consume() (value T, valid bool, err error) {
+func (ego *activeMerger[T]) Consume() (value T, valid bool, err error) {
 	//TODO beware: this is active waiting
-	//The merger implementation has been  changed from original lazy implementation to decrease existing  goroutine number -> now we create goroutine only for nonchanneled sources
+	//The merger implementation has been  changed from original lazy implementation to decrease number of goroutines -> now we create goroutine only for nonchanneled sources
 	//In the original implementation each source had its own goroutine - it was waiting on sources get, until value appearead, then it pushed it into merger's output buffer (see older commits - cca 14.9.2023).
-	//The price to pay is this active polling of sources in round robin style
+	//The price to pay is this active polling of sources in round robin style when Get is requested
 	for {
 		//has to be locked inside loop so sources can be added/removed between iterations
 		ego.sourcesLock.Lock()
@@ -163,7 +164,7 @@ func (ego *channeledMerger[T]) Consume() (value T, valid bool, err error) {
 	return *new(T), true, errors.New("no sources attached yet or all sources were unset and autoclose is not active")
 }
 
-func (ego *channeledMerger[T]) Get() (value T, valid bool, err error) {
+func (ego *activeMerger[T]) Get() (value T, valid bool, err error) {
 	value, valid, err = ego.Consume()
 	return
 }
