@@ -139,7 +139,7 @@ The merger merges multiple streams into a single one. It can be configured to cl
 ```go
 capacity := 3
 autoclose := true
-m := stream.NewChanneledMerger[int](capacity, autoclose)
+m := stream.NewActiveMerger[int](autoclose)
 s1.Pipe(m)
 s2.Pipe(m)
 ```
