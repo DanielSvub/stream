@@ -404,21 +404,18 @@ func TestStream(t *testing.T) {
 	})
 
 	t.Run("Merge (general functionality, autoclose)", func(t *testing.T) {
-		mergers := []struct {
-			name   string
-			merger Merger[int]
-		}{
-			{"ActiveMerger", NewActiveMerger[int](true)},
-			{"ChanneledLazyMerger", NewChanneledLazyMerger[int](100, true)},
+		mergers := map[string]Merger[int]{
+			"ActiveMerger":        NewActiveMerger[int](true),
+			"ChanneledLazyMerger": NewChanneledLazyMerger[int](100, true),
 		}
 
-		for _, mergeS := range mergers {
-			t.Run(mergeS.name, func(t *testing.T) {
+		for name, mergeS := range mergers {
+			t.Run(name, func(t *testing.T) {
 				inputsCount := 10
 				inS := make([]ChanneledInput[int], inputsCount)
 				for i := 0; i < inputsCount; i++ {
 					inS[i] = NewChanneledInput[int](testDataSize)
-					inS[i].Pipe(mergeS.merger)
+					inS[i].Pipe(mergeS)
 				}
 
 				data := make([][]int, inputsCount)
@@ -432,7 +429,7 @@ func TestStream(t *testing.T) {
 				}
 				// If data sent into input streams and received from merger are the same (and with same relative order for each input stream), we are ok.
 				for {
-					value, ok, err := mergeS.merger.Get()
+					value, ok, err := mergeS.Get()
 					if err != nil {
 						t.Error(err)
 					}
@@ -461,21 +458,18 @@ func TestStream(t *testing.T) {
 	})
 
 	t.Run("Merge force close", func(t *testing.T) {
-		mergers := []struct {
-			name   string
-			merger Merger[int]
-		}{
-			{"ActiveMerger", NewActiveMerger[int](true)},
-			{"ChanneledLazyMerger", NewChanneledLazyMerger[int](100, true)},
+		mergers := map[string]Merger[int]{
+			"ActiveMerger":        NewActiveMerger[int](true),
+			"ChanneledLazyMerger": NewChanneledLazyMerger[int](100, true),
 		}
 
-		for _, mergeS := range mergers {
-			t.Run(mergeS.name, func(t *testing.T) {
+		for name, mergeS := range mergers {
+			t.Run(name, func(t *testing.T) {
 				inputsCount := 10
 				inS := make([]ChanneledInput[int], inputsCount)
 				for i := 0; i < inputsCount; i++ {
 					inS[i] = NewChanneledInput[int](testDataSize)
-					inS[i].Pipe(mergeS.merger)
+					inS[i].Pipe(mergeS)
 				}
 
 				for i := 0; i < inputsCount; i++ {
@@ -487,10 +481,10 @@ func TestStream(t *testing.T) {
 						}
 					}()
 				}
-				for !mergeS.merger.Closed() {
-					mergeS.merger.Get()
+				for !mergeS.Closed() {
+					mergeS.Get()
 					if rand.Int()%100 == 0 {
-						mergeS.merger.Close()
+						mergeS.Close()
 					}
 				}
 			})
