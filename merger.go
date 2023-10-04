@@ -175,14 +175,15 @@ Implements:
 */
 type channeledLazyMerger[T any] struct {
 	ChanneledInput[T]
-	sources        []Producer[T]
-	autoclose      bool
-	sourcesLock    sync.Mutex
-	overflowBuffer []T
+	sources            []Producer[T]
+	autoclose          bool
+	overflowBuffer     []T
+	sourcesLock        sync.Mutex
+	overflowBufferLock sync.Mutex
 }
 
 /*
-NewChanneledMerge is a constructor of the channeled merger.
+NewChanneledLazyMerger is a constructor of the channeled merger.
 Channeled merger is a merger implementation based on ChanneledInput.
 
 Type parameters:
@@ -234,13 +235,21 @@ func (ego *channeledLazyMerger[T]) merge(s Producer[T]) {
 		// It may happen that the routine was waiting on get while the merge stream got closed. Then we send the delayed data to overflowBuffer and then serve them through Get().
 		defer func() {
 			if r := recover(); r != nil {
+				ego.overflowBufferLock.Lock()
 				ego.overflowBuffer = append(ego.overflowBuffer, value)
-				log.Default().Println("Channel closed externally, extra data sent to overflow buffer.", r, value)
+				ego.overflowBufferLock.Unlock()
+				log.Default().Println("Channel closed externally while I was waiting on write, extra data sent to overflow buffer. Value: ", value)
 			}
 		}()
 
+		//In theory we have data race with closing of channel in Close().
+		//Practically if we are waiting on channel write and someone calls Close(),
+		//the channel gets closed and channel write panics (the essence of the data race),
+		//but then the panic is deferred in the function above to push data into overflowBuffer.
+		//This is hacky, but I do not know about clean solution in the current architecture.
+		//Putting both actions under lock is not going to work, as if we want to be able to
+		//force-close the merger then we need to be able to interrupt the goroutine waiting on write even if it holds the lock (same data race).
 		ego.Channel() <- value
-
 	}
 
 }
@@ -257,7 +266,6 @@ func (ego *channeledLazyMerger[T]) unsetSource(s Producer[T]) {
 		return
 	}
 
-	defer ego.sourcesLock.Unlock()
 	ego.sourcesLock.Lock()
 
 	for i, source := range ego.sources {
@@ -268,22 +276,25 @@ func (ego *channeledLazyMerger[T]) unsetSource(s Producer[T]) {
 	}
 
 	if ego.autoclose && len(ego.sources) == 0 {
+		ego.sourcesLock.Unlock()
 		ego.Close()
+		return
 	}
+	ego.sourcesLock.Unlock()
 
 }
 
 func (ego *channeledLazyMerger[T]) SetSource(s Producer[T]) error {
 
-	defer ego.sourcesLock.Unlock()
 	ego.sourcesLock.Lock()
 
 	if ego.Closed() {
+		ego.sourcesLock.Unlock()
 		return errors.New("the stream is already closed")
 	}
 
 	ego.sources = append(ego.sources, s)
-
+	ego.sourcesLock.Unlock()
 	go ego.merge(s)
 
 	return nil
@@ -295,17 +306,29 @@ func (ego *channeledLazyMerger[T]) CanSetSource() bool {
 }
 
 func (ego *channeledLazyMerger[T]) Close() {
-	for _, s := range ego.sources {
+	ego.sourcesLock.Lock()
+	numSources := len(ego.sources)
+	for numSources > 0 {
+		s := ego.sources[0]
+		ego.sourcesLock.Unlock()
 		ego.unsetSource(s)
+		ego.sourcesLock.Lock()
+		numSources = len(ego.sources)
 	}
+	ego.sourcesLock.Unlock()
+	//In theory we have data race with merge here (closing of and writing to channel),
+	//see comment in merge for details and current solution.
 	ego.ChanneledInput.Close()
+
 }
 
 func (ego *channeledLazyMerger[T]) Consume() (value T, valid bool, err error) {
 	value, valid = <-ego.Channel()
 	if !valid && len(ego.overflowBuffer) > 0 {
+		ego.overflowBufferLock.Lock()
 		value = ego.overflowBuffer[0]
 		ego.overflowBuffer = ego.overflowBuffer[1:]
+		ego.overflowBufferLock.Unlock()
 		valid = true
 	}
 	return
