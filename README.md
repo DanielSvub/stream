@@ -136,10 +136,9 @@ b1 := ss.Default()
 
 The merger merges multiple streams into a single one. It can be configured to close automatically (after closing of all currently attached sources) or manually.
 
-We have two basic implementations: activeMerger and channeledLazyMerger. When Get is called, activeMerger is cycling through its sources in round robin style until it hits any with data available (for nonchanelled sources goroutine is still spawned, see code for details). On the other hand channeledLazyMerger contains buffer which is concurently filled by every attached source (each has its own goroutine trying to push data into buffer whenever it is possible). That is when there is no data to process in the sources and Get is called, the activeMerger indefinitelly polls sources while the chanelledLazyMerger waits on its buffer (channel).
+We have two basic implementations: ``channeledLazyMerger`` and ``activeMerger``. The channeledLazyMerger contains a buffer which is concurently filled by every attached source (each has its own goroutine trying to push data into the buffer whenever it is possible). On the other hand, the activeMerger is cycling through its sources in round robin style until it hits any with data available (for nonchanelled sources a goroutine is still spawned, see code for details). That is when there is no data to process in the sources and the Get method is called, the activeMerger indefinitelly polls sources while the chanelledLazyMerger waits on its buffer (channel).
 
 ```go
-capacity := 3
 autoclose := true
 m := stream.NewActiveMerger[int](autoclose)
 s1.Pipe(m)
