@@ -3,6 +3,7 @@ package stream
 import (
 	"errors"
 	"fmt"
+	"sync"
 )
 
 /*
@@ -12,7 +13,8 @@ Implements:
 type channeledInput[T any] struct {
 	closed bool
 	DefaultProducer[T]
-	channel chan T
+	channel     chan T
+	closingLock sync.Mutex
 }
 
 /*
@@ -28,7 +30,7 @@ Returns:
   - pointer to the new channeled input.
 */
 func NewChanneledInput[T any](capacity int) ChanneledInput[T] {
-	ego := &channeledInput[T]{channel: make(chan T, capacity)}
+	ego := &channeledInput[T]{channel: make(chan T, capacity), closingLock: sync.Mutex{}}
 	ego.DefaultProducer = *NewDefaultProducer[T](ego)
 	return ego
 }
@@ -43,8 +45,12 @@ func (ego *channeledInput[T]) Get() (value T, valid bool, err error) {
 }
 
 func (ego *channeledInput[T]) Close() {
-	close(ego.channel)
-	ego.closed = true
+	ego.closingLock.Lock()
+	if !ego.closed {
+		close(ego.channel)
+		ego.closed = true
+	}
+	ego.closingLock.Unlock()
 }
 
 func (ego *channeledInput[T]) Closed() bool {

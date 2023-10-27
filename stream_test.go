@@ -109,8 +109,8 @@ func TestStream(t *testing.T) {
 			}
 		}
 		inS := NewChanneledInput[int](testDataSize)
-		traS := NewTransformer[int, string](transform)
-		outS := NewTransformer[string, int](inverse)
+		traS := NewTransformer(transform)
+		outS := NewTransformer(inverse)
 		inS.Pipe(traS).(Producer[string]).Pipe(outS)
 
 		data := make([]int, testDataSize)
@@ -404,76 +404,90 @@ func TestStream(t *testing.T) {
 	})
 
 	t.Run("Merge (general functionality, autoclose)", func(t *testing.T) {
-		inputsCount := 10
-		inS := make([]ChanneledInput[int], inputsCount)
-		mergeS := NewChanneledMerger[int](inputsCount, true)
-		for i := 0; i < inputsCount; i++ {
-			inS[i] = NewChanneledInput[int](testDataSize)
-			inS[i].Pipe(mergeS)
+		mergers := map[string]Merger[int]{
+			"ActiveMerger":        NewActiveMerger[int](true),
+			"ChanneledLazyMerger": NewChanneledLazyMerger[int](100, true),
 		}
 
-		data := make([][]int, inputsCount)
-		for i := 0; i < inputsCount; i++ {
-			data[i] = make([]int, testDataSize)
-			for j := 0; j < testDataSize; j++ {
-				data[i][j] = rand.Int()%100 + (i+1)*1000 //each input stream has random values betwenn i*1000 and (i+1)*1000 -> easy to check which value came from which stream
-				inS[i].Write(data[i][j])
-			}
-			inS[i].Close()
-		}
-		// If data sent into input streams and received from merger are the same (and with same relative order for each input stream), we are ok.
-		for {
-			value, ok, err := mergeS.Get()
-			if err != nil {
-				t.Error(err)
-			}
-			if !ok {
-				break
-			}
-			sourceIndex := (value / 1000) - 1
-			if len(data[sourceIndex]) == 0 {
-				t.Error("Received more data than it was sent into the source.")
-			}
-			expectedData := data[sourceIndex][0]
-			data[sourceIndex] = data[sourceIndex][1:]
-			if expectedData != value {
-				t.Error("Got wrong data:", value, "expected:", expectedData)
-			}
+		for name, mergeS := range mergers {
+			t.Run(name, func(t *testing.T) {
+				inputsCount := 10
+				inS := make([]ChanneledInput[int], inputsCount)
+				for i := 0; i < inputsCount; i++ {
+					inS[i] = NewChanneledInput[int](testDataSize)
+					inS[i].Pipe(mergeS)
+				}
 
+				data := make([][]int, inputsCount)
+				for i := 0; i < inputsCount; i++ {
+					data[i] = make([]int, testDataSize)
+					for j := 0; j < testDataSize; j++ {
+						data[i][j] = rand.Int()%100 + (i+1)*1000 //each input stream has random values betwenn i*1000 and (i+1)*1000 -> easy to check which value came from which stream
+						inS[i].Write(data[i][j])
+					}
+					inS[i].Close()
+				}
+				// If data sent into input streams and received from merger are the same (and with same relative order for each input stream), we are ok.
+				for {
+					value, ok, err := mergeS.Get()
+					if err != nil {
+						t.Error(err)
+					}
+					if !ok {
+						break
+					}
+					sourceIndex := (value / 1000) - 1
+					if len(data[sourceIndex]) == 0 {
+						t.Error("Received more data than it was sent into the source.")
+					}
+					expectedData := data[sourceIndex][0]
+					data[sourceIndex] = data[sourceIndex][1:]
+					if expectedData != value {
+						t.Error("Got wrong data:", value, "expected:", expectedData)
+					}
+
+				}
+				for i := 0; i < inputsCount; i++ {
+					if len(data[i]) > 0 {
+						t.Error("Some data were sent but not received.", i, data[i])
+					}
+				}
+			})
 		}
-		for i := 0; i < inputsCount; i++ {
-			if len(data[i]) > 0 {
-				t.Error("Some data were sent but not received.", i, data[i])
-			}
-		}
+
 	})
 
 	t.Run("Merge force close", func(t *testing.T) {
-		inputsCount := 10
-		inS := make([]ChanneledInput[int], inputsCount)
-		mergeS := NewChanneledMerger[int](inputsCount, false)
-		for i := 0; i < inputsCount; i++ {
-			inS[i] = NewChanneledInput[int](testDataSize)
-			inS[i].Pipe(mergeS)
+		mergers := map[string]Merger[int]{
+			"ActiveMerger":        NewActiveMerger[int](true),
+			"ChanneledLazyMerger": NewChanneledLazyMerger[int](100, true),
 		}
 
-		for i := 0; i < inputsCount; i++ {
-			t := i
-			go func() {
-				for {
-					inS[t].Write(rand.Int()%100 + (t+1)*1000)
-					//each input stream has random values betwenn i*1000 and (i+1)*1000 -> easy to check which value came from which stream
+		for name, mergeS := range mergers {
+			t.Run(name, func(t *testing.T) {
+				inputsCount := 10
+				inS := make([]ChanneledInput[int], inputsCount)
+				for i := 0; i < inputsCount; i++ {
+					inS[i] = NewChanneledInput[int](testDataSize)
+					inS[i].Pipe(mergeS)
 				}
-			}()
-		}
-		k := 0
-		for !mergeS.Closed() {
-			mergeS.Get()
-			if rand.Int()%100 == 0 {
-				mergeS.Close()
-				k++
-				//println(mergeS.Closed())
-			}
+
+				for i := 0; i < inputsCount; i++ {
+					t := i
+					go func() {
+						for {
+							inS[t].Write(rand.Int()%100 + (t+1)*1000)
+							//each input stream has random values betwenn i*1000 and (i+1)*1000 -> easy to check which value came from which stream
+						}
+					}()
+				}
+				for !mergeS.Closed() {
+					mergeS.Get()
+					if rand.Int()%100 == 0 {
+						mergeS.Close()
+					}
+				}
+			})
 		}
 
 	})
@@ -492,7 +506,7 @@ func TestStream(t *testing.T) {
 		filOdd := NewFilter(filterOdd)
 		traEven := NewTransformer(transformEven)
 		traOdd := NewTransformer(transformOdd)
-		merS := NewChanneledMerger[int](10, true)
+		merS := NewActiveMerger[int](true)
 
 		//prepare pipeline
 		inS.Pipe(dupS)
@@ -514,23 +528,22 @@ func TestStream(t *testing.T) {
 		}()
 
 		// read data from the end of the pipeline
-		dataRed := make([]int, testDataSize)
+		dataRed := make([]int, 0)
 		j := 0
 		for {
 			value, ok, err := merS.Get()
-			//			println("Got value", value, inS.Closed(), filOdd.Closed(), traOdd.Closed(), merS.Closed())
 			if err != nil {
 				t.Error(err)
 			}
 			if !ok {
 				break
 			}
-			dataRed[j] = value
+			dataRed = append(dataRed, value)
 			j++
 
 		}
 
-		// sort data red fro the pipeline for easy comaprison with expectations
+		// sort data red from the pipeline for easy comparison with expectations
 		sort.Slice(dataRed, func(i, j int) bool {
 			return dataRed[i] < dataRed[j]
 		})
@@ -547,7 +560,11 @@ func TestStream(t *testing.T) {
 			return data[i] < data[j]
 		})
 
-		//check the outcome
+		//check the outcome - length
+		if len(dataRed) != testDataSize {
+			t.Error("Got ", len(dataRed), " values instead of ", testDataSize)
+		}
+		//values
 		for i := 0; i < testDataSize; i++ {
 			if data[i] != dataRed[i] {
 				t.Error("Unexpected value red", dataRed[i], data[i])
@@ -557,6 +574,7 @@ func TestStream(t *testing.T) {
 	})
 }
 
+// ported from older version of streams
 func TestBuffer(t *testing.T) {
 
 	t.Run("read", func(t *testing.T) {
