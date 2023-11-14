@@ -21,9 +21,8 @@ type activeMerger[T any] struct {
 
 /*
 NewActiveMerger creates new activeMerger.
-
-	activeMerger is merger which actively in round-robin style polls attached sources (producers) in it's get.
-	Beware that if attached source is not channeled then new goroutine is spawned to push data through channel the merger can select on.
+ActiveMerger is merger which actively in round-robin style polls attached sources (producers) in it's get.
+Beware that if attached source is not channeled then new goroutine is spawned to push data through channel the merger can select on.
 
 Type parameters:
   - T - type of the consumed and produced values.
@@ -94,7 +93,7 @@ func (ego *activeMerger[T]) SetSource(s Producer[T]) error {
 
 				value, valid, err := s.Get()
 
-				//source is exhausted
+				// Source is exhausted
 				if !valid {
 					chp.Close()
 					return
@@ -129,18 +128,22 @@ func (ego *activeMerger[T]) Close() {
 }
 
 func (ego *activeMerger[T]) Consume() (value T, valid bool, err error) {
-	//TODO beware: this is active waiting
-	//The merger implementation has been  changed from original lazy implementation to decrease number of goroutines -> now we create goroutine only for nonchanneled sources
-	//In the original implementation each source had its own goroutine - it was waiting on sources get, until value appearead, then it pushed it into merger's output buffer (see older commits - cca 14.9.2023).
-	//The price to pay is this active polling of sources in round robin style when Get is requested
+
+	// Beware: this is active waiting
+	// The merger implementation has been changed from original lazy implementation to decrease number of goroutines.
+	// Now we create goroutine only for nonchanneled sources, in the original implementation each source had its own goroutine.
+	// The price to pay is this active polling of sources in round robin style when Get() is requested.
 	for {
-		//has to be locked inside loop so sources can be added/removed between iterations
+
+		// Has to be locked inside loop so sources can be added/removed between iterations
 		ego.sourcesLock.Lock()
 		if len(ego.sources) == 0 {
 			ego.sourcesLock.Unlock()
 			break
 		}
+
 		ego.nextToReadFrom = (ego.nextToReadFrom + 1) % len(ego.sources)
+
 		select {
 		case value, valid := <-ego.sources[ego.nextToReadFrom].Channel():
 			if !valid {
@@ -157,11 +160,15 @@ func (ego *activeMerger[T]) Consume() (value T, valid bool, err error) {
 			ego.sourcesLock.Unlock()
 			continue
 		}
+
 	}
+
 	if ego.Closed() {
 		return *new(T), false, nil
 	}
+
 	return *new(T), true, errors.New("no sources attached yet or all sources were unset and autoclose is not active")
+
 }
 
 func (ego *activeMerger[T]) Get() (value T, valid bool, err error) {
@@ -232,7 +239,8 @@ func (ego *channeledLazyMerger[T]) merge(s Producer[T]) {
 			return
 		}
 
-		// It may happen that the routine was waiting on get while the merge stream got closed. Then we send the delayed data to overflowBuffer and then serve them through Get().
+		// It may happen that the routine was waiting on get while the merge stream got closed.
+		// Then we send the delayed data to overflowBuffer and then serve them through Get().
 		defer func() {
 			if r := recover(); r != nil {
 				ego.overflowBufferLock.Lock()
@@ -242,14 +250,13 @@ func (ego *channeledLazyMerger[T]) merge(s Producer[T]) {
 			}
 		}()
 
-		//In theory we have data race with closing of channel in Close().
-		//Practically if we are waiting on channel write and someone calls Close(),
-		//the channel gets closed and channel write panics (the essence of the data race),
-		//but then the panic is deferred in the function above to push data into overflowBuffer.
-		//This is hacky, but I do not know about clean solution in the current architecture.
-		//Putting both actions under lock is not going to work, as if we want to be able to
-		//force-close the merger then we need to be able to interrupt the goroutine waiting on write even if it holds the lock (same data race).
+		// In theory, we have data race with closing of channel in Close().
+		// Practically, if we are waiting on channel write and someone calls Close(), the channel gets closed and channel write panics (the essence of the data race).
+		// But then the panic is deferred in the function above to push data into overflowBuffer.
+		// Putting both actions under lock is not going to work.
+		// If we want to be able to force-close the merger, we need to be able to interrupt the goroutine waiting on write even if it holds the lock (same data race).
 		ego.Channel() <- value
+
 	}
 
 }
@@ -316,8 +323,9 @@ func (ego *channeledLazyMerger[T]) Close() {
 		numSources = len(ego.sources)
 	}
 	ego.sourcesLock.Unlock()
-	//In theory we have data race with merge here (closing of and writing to channel),
-	//see comment in merge for details and current solution.
+
+	// In theory we have data race with merge here (closing of and writing to channel).
+	// See merge() for details.
 	ego.ChanneledInput.Close()
 
 }
