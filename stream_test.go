@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	. "github.com/SpongeData-cz/stream"
+	. "github.com/DanielSvub/stream"
 )
 
 const (

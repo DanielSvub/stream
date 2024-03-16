@@ -1,3 +1,3 @@
-go 1.18
+module github.com/DanielSvub/stream
 
-module github.com/SpongeData-cz/stream
+go 1.18
